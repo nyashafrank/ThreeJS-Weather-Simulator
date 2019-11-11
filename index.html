@@ -1,0 +1,236 @@
+<!doctype html>
+<html>
+
+	<head>
+		<meta charset=UTF-8 />
+		<link rel="stylesheet" type="text/css" href="style.css" />
+		<title>Final Project: Nyasha Frank</title>
+	</head>
+
+	<body>		
+		<script src="https://threejs.org/build/three.min.js"></script>
+		<script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+		<script src="https://threejs.org/examples/js/loaders/OBJLoader.js"></script>
+		<script  src="https://threejs.org/examples/js/loaders/MTLLoader.js"></script>
+		<script  src="https://threejs.org/examples/js/loaders/FBXLoader.js"></script>
+		
+
+		<script>
+			"use strict";
+
+			let scene, camera, renderer, cameraControls, cloudParticles = [], flash, rain, rainGeo, rainCount = 10000, sound;
+
+			let WIDTH  = window.innerWidth;
+			let HEIGHT = window.innerHeight;
+
+			function init() {
+				scene = new THREE.Scene();
+
+				initCamera();
+
+				let ambientLight = new THREE.AmbientLight(0x555555);
+				scene.add(ambientLight);
+
+				let directionalLight = new THREE.DirectionalLight(0xffeedd);
+				directionalLight.position.set(0, 0, 1);
+				scene.add(directionalLight);
+
+
+				// rain and lightning effect (redstapler.co)
+				flash = new THREE.PointLight(0x062d89, 30, 500, 1.7);
+				flash.position.set(200, 300, 100);
+				scene.add(flash);
+
+				renderer = new THREE.WebGLRenderer({ antialias: true });
+
+				scene.fog = new THREE.FogExp2(0x1c1c2a, 0.002);
+				renderer.setClearColor(scene.fog.color);
+				renderer.setSize(WIDTH, HEIGHT);
+				document.body.appendChild(renderer.domElement);
+
+				camera = new THREE.PerspectiveCamera(60, WIDTH / HEIGHT, 1, 1000);
+				camera.position.z = 1;
+				camera.position.y = 100;
+				camera.position.x = 1;
+
+				//camera.lookAt(scene.position);
+
+				cameraControls = new THREE.OrbitControls ( 
+					camera, renderer.domElement
+				);
+				cameraControls.addEventListener("change",
+					function(){
+						camera.updateProjectionMatrix();
+						render();
+					}
+				);
+
+				rainGeo = new THREE.Geometry();
+
+				for(let i = 0; i < rainCount; i++) {
+					let rainDrop = new THREE.Vector3(
+						Math.random() * 400 - 200,
+						Math.random() * 500 - 250,
+						Math.random() * 400 - 200
+					);
+					rainDrop.velocity = {};
+					rainDrop.velocity = 0;
+
+					rainGeo.vertices.push(rainDrop);
+				}
+
+				let rainMaterial = new THREE.PointsMaterial({
+					color: 0xaaaaaa,
+					size: 0.1,
+					transparent: true
+				});
+
+				rain = new THREE.Points(rainGeo, rainMaterial);
+				scene.add(rain);
+
+
+				let loader = new THREE.TextureLoader();
+				loader.load("smoke.png", function(tex) {
+
+					let cloudGeo = new THREE.PlaneBufferGeometry(500, 500);
+					let cloudMaterial = new THREE.MeshLambertMaterial({
+						map: tex,
+						transparent: true
+					});
+
+					for(let i = 0; i < 25; i++) {
+						let cloud = new THREE.Mesh(cloudGeo, cloudMaterial);
+						cloud.position.set(
+							Math.random()*800 - 400,
+							500,
+							Math.random()*500 - 450
+						);
+						cloud.rotation.x = 1.16;
+						cloud.rotation.y = -0.12;
+						cloud.rotation.z = Math.random()*360;
+						cloud.material.opacity = 0.6;
+						cloudParticles.push(cloud);
+						scene.add(cloud);
+					}
+					//render();
+
+
+					// load a sound and set it as the Audio object's buffer
+					// Rain sound (youtube.com/audiolibrary/)
+					var audioLoader = new THREE.AudioLoader();
+					audioLoader.load( 'Rain_Heavy_Loud.mp3', function( buffer ) {
+
+						var listener = new THREE.AudioListener();
+						sound = new THREE.Audio( listener );
+						scene.add(sound);
+						scene.add(listener);
+						camera.add( listener );
+
+						sound.setBuffer( buffer );
+						sound.setLoop( true );
+						sound.setVolume( 0.5 );
+						sound.play();
+						animate();
+						
+					});
+				});
+
+				let material = new THREE.MeshStandardMaterial();
+				//material.wireframe=true;
+				
+				var objLoader = new THREE.OBJLoader(  );
+				
+				var mtlLoader = new THREE.MTLLoader( );
+			
+				var texture = new THREE.TextureLoader().load( './34-street/Street/tex/Red Brickjpg_SPEC.png' );
+
+				// immediately use the texture for material creation
+				var streetMaterial = new THREE.MeshBasicMaterial( { map: texture } );
+
+				objLoader.setPath("./34-street/Street/");
+				objLoader.load( 
+					"simplestreet.obj",
+					function ( obj ) {
+						/*obj.traverse( function( child ) {
+							if ( child instanceof THREE.Mesh ) {
+								child.material = streetMaterial;
+							}
+						} ); */
+						obj.scale.set(2,3,2);
+						obj.position.set(0, -100, 0);
+						scene.add(obj);
+						render();
+					},
+					function( err ){
+						console.error( "Error loading '.obj'")
+					}, 
+					function ( xhr ) {
+						if ( xhr.lengthComputable ) {
+							var percentComplete = xhr.loaded / xhr.total * 100;
+							console.log( 'model ' + Math.round( percentComplete, 2 ) + '% downloaded' );
+						}
+					}
+				);
+
+				handleResize();
+			}
+
+			function initCamera() {
+				
+			}
+
+			function animate() {
+				cloudParticles.forEach(c => {
+					c.rotation.z -= 0.002;
+				});
+
+				rainGeo.vertices.forEach(r => {
+					r.velocity -=0.1 + Math.random() * 0.1;
+					r.y += r.velocity;
+					if(r.y < -200) {
+						r.y = 200;
+						r.velocity = 0;
+					}
+				});
+
+				rainGeo.verticesNeedUpdate = true;
+				rain.rotation.y += 0.002;
+
+				if(Math.random() > 0.99 || flash.power > 100) {
+					if (flash.power < 100) {
+						flash.position.set(Math.random() * 400, 300 + Math.random() * 200, 100);
+					}
+
+					flash.power = 50 + Math.random() * 500;
+				}
+
+				render();
+				requestAnimationFrame(animate);
+			}
+			
+	
+			function handleResize(){
+				window.addEventListener (
+					"resize",
+					function () {
+						WIDTH = window.innerWidth ;
+						HEIGHT = window.innerHeight;
+						renderer.setSize(WIDTH,HEIGHT);
+						camera.aspect = WIDTH/HEIGHT;
+						camera.updateProjectionMatrix();
+						render();
+					}
+				);
+			}
+
+
+			function render() {
+				renderer.render(scene, camera);
+			}
+
+			init();
+			render();
+
+		</script>
+	</body>
+</html>
